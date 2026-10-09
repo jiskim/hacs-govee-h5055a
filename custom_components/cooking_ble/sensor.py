@@ -1,4 +1,4 @@
-"""Sensors for the Govee H5055A."""
+"""Sensors: Govee H5055A probes and the Anova water temperature."""
 
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import H5055AConfigEntry, H5055AData
-from .const import DOMAIN, SIGNAL_UPDATE
+from . import CookingConfigEntry, H5055AData
+from .anova_entity import AnovaEntity
+from .const import CONF_MODEL, DOMAIN, MODEL_ANOVA, SIGNAL_UPDATE
 
 
 def _probe(n: int) -> SensorEntityDescription:
@@ -50,10 +51,13 @@ DESCRIPTIONS = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: H5055AConfigEntry,
+    entry: CookingConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the sensors."""
+    if entry.data.get(CONF_MODEL) == MODEL_ANOVA:
+        async_add_entities([AnovaWaterTemperature(entry.runtime_data, "water_temperature")])
+        return
     async_add_entities(
         H5055ASensor(entry.runtime_data, description) for description in DESCRIPTIONS
     )
@@ -102,3 +106,20 @@ class H5055ASensor(SensorEntity):
     @callback
     def _handle_update(self) -> None:
         self.async_write_ha_state()
+
+
+class AnovaWaterTemperature(AnovaEntity, SensorEntity):
+    """Current water temperature of the Anova."""
+
+    _attr_translation_key = "water_temperature"
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return self._unit
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.current if self.coordinator.data else None

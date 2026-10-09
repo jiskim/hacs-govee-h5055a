@@ -1,4 +1,4 @@
-"""Config flow for the Govee H5055A."""
+"""Config flow for the Cooking BLE integration."""
 
 from __future__ import annotations
 
@@ -13,31 +13,47 @@ from homeassistant.components.bluetooth import (
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS
 
-from .const import DOMAIN, MANUFACTURER_ID, SERVICE_UUID
-from .parser import parse
+from .const import (
+    ANOVA_LOCAL_NAME,
+    ANOVA_SERVICE_UUID,
+    CONF_MODEL,
+    DOMAIN,
+    H5055A_MANUFACTURER_ID,
+    H5055A_SERVICE_UUID,
+    MODEL_ANOVA,
+    MODEL_H5055A,
+)
+from .h5055a import parse
 
 
-def _supported(info: BluetoothServiceInfoBleak) -> bool:
-    payload = info.manufacturer_data.get(MANUFACTURER_ID)
-    return (
-        SERVICE_UUID in info.service_uuids
+def _model(info: BluetoothServiceInfoBleak) -> str | None:
+    """Which supported device this is, if any."""
+    payload = info.manufacturer_data.get(H5055A_MANUFACTURER_ID)
+    if (
+        H5055A_SERVICE_UUID in info.service_uuids
         and payload is not None
         and parse(payload) is not None
-    )
+    ):
+        return MODEL_H5055A
+    if info.name == ANOVA_LOCAL_NAME and ANOVA_SERVICE_UUID in info.service_uuids:
+        return MODEL_ANOVA
+    return None
 
 
-def _title(info: BluetoothServiceInfoBleak) -> str:
-    return f"Govee H5055A {info.address[-5:].replace(':', '')}"
+def _title(model: str, address: str) -> str:
+    suffix = address[-5:].replace(":", "")
+    return f"Govee H5055A {suffix}" if model == MODEL_H5055A else f"Anova {suffix}"
 
 
-class H5055AConfigFlow(ConfigFlow, domain=DOMAIN):
+class CookingConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow."""
 
     VERSION = 1
 
     def __init__(self) -> None:
-        self._discovery: BluetoothServiceInfoBleak | None = None
+        self._model: str | None = None
         self._discovered: dict[str, str] = {}
+        self._models: dict[str, str] = {}
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -45,20 +61,22 @@ class H5055AConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle a device found by the bluetooth integration."""
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
-        if not _supported(discovery_info):
+        if (model := _model(discovery_info)) is None:
             return self.async_abort(reason="not_supported")
-        self._discovery = discovery_info
-        self.context["title_placeholders"] = {"name": _title(discovery_info)}
+        self._model = model
+        self.context["title_placeholders"] = {
+            "name": _title(model, discovery_info.address)
+        }
         return await self.async_step_bluetooth_confirm()
 
     async def async_step_bluetooth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Confirm a discovered device."""
-        assert self._discovery is not None
-        title = _title(self._discovery)
+        assert self._model is not None and self.unique_id is not None
+        title = _title(self._model, self.unique_id)
         if user_input is not None:
-            return self.async_create_entry(title=title, data={})
+            return self.async_create_entry(title=title, data={CONF_MODEL: self._model})
         self._set_confirm_only()
         return self.async_show_form(
             step_id="bluetooth_confirm", description_placeholders={"name": title}
@@ -72,12 +90,17 @@ class H5055AConfigFlow(ConfigFlow, domain=DOMAIN):
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(title=self._discovered[address], data={})
+            return self.async_create_entry(
+                title=self._discovered[address],
+                data={CONF_MODEL: self._models[address]},
+            )
 
         current = self._async_current_ids(include_ignore=False)
         for info in async_discovered_service_info(self.hass, connectable=False):
-            if info.address not in current and _supported(info):
-                self._discovered[info.address] = _title(info)
+            if info.address in current or (model := _model(info)) is None:
+                continue
+            self._discovered[info.address] = _title(model, info.address)
+            self._models[info.address] = model
         if not self._discovered:
             return self.async_abort(reason="no_devices_found")
         return self.async_show_form(

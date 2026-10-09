@@ -1,0 +1,44 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Choose the device to set up.",
+        "data": {
+          "address": "Device"
+        }
+      },
+      "bluetooth_confirm": {
+        "description": "Set up {name}?"
+      }
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "no_devices_found": "No supported device advertising right now. Turn it on (and close the Anova app) and try again.",
+      "not_supported": "This is not a Govee H5055A or a classic Bluetooth Anova Precision Cooker."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "probe": {
+        "name": "Probe {probe}"
+      },
+      "raw": {
+        "name": "Raw packet"
+      },
+      "water_temperature": {
+        "name": "Water temperature"
+      }
+    },
+    "number": {
+      "target_temperature": {
+        "name": "Target temperature"
+      }
+    },
+    "switch": {
+      "running": {
+        "name": "Running"
+      }
+    }
+  }
+}
