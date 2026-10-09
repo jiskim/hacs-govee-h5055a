@@ -26,6 +26,8 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 
 CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
 RESPONSE_TIMEOUT = 5
+FLUSH_DELAY = 0.5
+INVALID = "invalid command"
 
 
 class AnovaError(Exception):
@@ -66,7 +68,9 @@ class AnovaClient:
                 running=status.lower() == "running",
             )
         except ValueError as err:
-            raise AnovaError(f"unexpected answer: {current!r} {target!r}") from err
+            raise AnovaError(
+                f"unexpected answers: {current!r} {target!r} {unit!r} {status!r}"
+            ) from err
 
     async def set_target(self, temperature: float) -> None:
         """Set the target temperature, in the cooker's unit."""
@@ -81,26 +85,53 @@ class AnovaClient:
             client = await establish_connection(
                 BleakClientWithServiceCache, self._device, self._device.address
             )
+            lines: asyncio.Queue[str] = asyncio.Queue()
+            buffer = bytearray()
+
+            def _on_notify(_sender: object, data: bytearray) -> None:
+                buffer.extend(data)
+                while b"\r" in buffer:
+                    line, _, rest = buffer.partition(b"\r")
+                    buffer[:] = rest
+                    lines.put_nowait(line.decode(errors="replace").strip())
+
             try:
-                return [await self._command(client, cmd) for cmd in commands]
+                await client.start_notify(CHAR_UUID, _on_notify)
+                await self._flush(client, lines)
+                return [await self._command(client, lines, cmd) for cmd in commands]
             finally:
                 await client.disconnect()
 
-    async def _command(self, client: BleakClientWithServiceCache, command: str) -> str:
-        buffer = bytearray()
-        done = asyncio.Event()
+    async def _flush(
+        self, client: BleakClientWithServiceCache, lines: asyncio.Queue[str]
+    ) -> None:
+        """Terminate whatever junk sits in the cooker's input line.
 
-        def _on_notify(_sender: object, data: bytearray) -> None:
-            buffer.extend(data)
-            if b"\r" in buffer:
-                done.set()
+        The serial module passes its own connect/disconnect notices (e.g.
+        "OK+LOST") to the cooker as text, so after a quick reconnect the first
+        real command arrives glued to them and is rejected as "Invalid Command".
+        A bare "\\r" ends that junk line; its answer is thrown away.
+        """
+        await client.write_gatt_char(CHAR_UUID, b"\r", response=False)
+        await asyncio.sleep(FLUSH_DELAY)
+        while not lines.empty():
+            lines.get_nowait()
 
-        await client.start_notify(CHAR_UUID, _on_notify)
-        try:
-            await client.write_gatt_char(CHAR_UUID, f"{command}\r".encode(), response=False)
-            await asyncio.wait_for(done.wait(), RESPONSE_TIMEOUT)
-        except TimeoutError as err:
-            raise AnovaError(f"no answer to {command!r}") from err
-        finally:
-            await client.stop_notify(CHAR_UUID)
-        return buffer.split(b"\r", 1)[0].decode(errors="replace").strip()
+    async def _command(
+        self,
+        client: BleakClientWithServiceCache,
+        lines: asyncio.Queue[str],
+        command: str,
+    ) -> str:
+        """Send one command and return its answer, retrying once if rejected."""
+        for attempt in range(2):
+            await client.write_gatt_char(
+                CHAR_UUID, f"{command}\r".encode(), response=False
+            )
+            try:
+                answer = await asyncio.wait_for(lines.get(), RESPONSE_TIMEOUT)
+            except TimeoutError as err:
+                raise AnovaError(f"no answer to {command!r}") from err
+            if answer.lower() != INVALID or attempt:
+                return answer
+        return answer
