@@ -31,9 +31,11 @@ class AnovaRunning(AnovaEntity, SwitchEntity):
         return self.coordinator.data.running if self.coordinator.data else None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.coordinator.client.set_running(True)
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_command(
+            self.coordinator.client.set_running(True), running=True
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.coordinator.client.set_running(False)
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_command(
+            self.coordinator.client.set_running(False), running=False
+        )

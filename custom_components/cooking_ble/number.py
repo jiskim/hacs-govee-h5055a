@@ -51,5 +51,6 @@ class AnovaTarget(AnovaEntity, NumberEntity):
         return self.coordinator.data.target if self.coordinator.data else None
 
     async def async_set_native_value(self, value: float) -> None:
-        await self.coordinator.client.set_target(value)
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_command(
+            self.coordinator.client.set_target(value), target=round(value, 1)
+        )
