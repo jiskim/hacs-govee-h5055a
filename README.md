@@ -20,8 +20,8 @@ Ignore the same device in `govee_ble` so its broken entities go away.
 
 | Entity | Notes |
 |---|---|
-| Probe 1 / 3 / 5 | °C, unknown when the probe is unplugged |
+| Probe 1 – 6 | °C, unknown when the probe is unplugged |
 | Battery | diagnostic |
 | Raw packet | diagnostic, disabled by default; hex of the latest payload |
 
-Probes 2, 4 and 6 are not decoded yet; see `parser.py` for the known layout.
+See `parser.py` for the packet layout.

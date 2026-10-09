@@ -31,9 +31,7 @@ def _probe(n: int) -> SensorEntityDescription:
 
 
 DESCRIPTIONS = (
-    _probe(1),
-    _probe(3),
-    _probe(5),
+    *(_probe(n) for n in range(1, 7)),
     SensorEntityDescription(
         key="battery",
         device_class=SensorDeviceClass.BATTERY,
