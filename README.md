@@ -31,3 +31,22 @@ Ignore the H5055A in `govee_ble` so its broken entities go away.
 | Anova | Running | switch: start / stop |
 
 See `h5055a.py` and `anova_client.py` for the protocols.
+
+## Credits
+
+The H5055A packet layout was worked out from this thermometer's own
+advertisements; the original H5055 decoder in
+[govee-ble](https://github.com/Bluetooth-Devices/govee-ble) was the starting
+point for comparison.
+
+The Anova protocol (service `FFE0`, characteristic `FFE1`, ASCII commands such
+as `read temp` / `set temp` / `start` / `stop` terminated by `\r`) comes from
+community reverse engineering — no code was copied, but these documented it:
+
+- [neilpa/circulate](https://github.com/neilpa/circulate) — reverse-engineered
+  iOS library for the Anova over Bluetooth (MIT), the original protocol reference.
+- [erikcw/pycirculate](https://github.com/erikcw/pycirculate) — Python/BlueZ
+  wrapper built on circulate's command set.
+
+The "flush the line after connecting" workaround in `anova_client.py` is our
+own: it fixes "Invalid Command" answers after quick reconnects.
