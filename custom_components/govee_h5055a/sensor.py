@@ -80,7 +80,11 @@ class H5055ASensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        return self._data.available and self.entity_description.key in self._data.values
+        # An unplugged probe decodes to None and shows as unavailable.
+        return (
+            self._data.available
+            and self._data.values.get(self.entity_description.key) is not None
+        )
 
     @property
     def native_value(self) -> float | int | str | None:

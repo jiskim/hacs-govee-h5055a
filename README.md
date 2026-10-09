@@ -20,7 +20,7 @@ Ignore the same device in `govee_ble` so its broken entities go away.
 
 | Entity | Notes |
 |---|---|
-| Probe 1 – 6 | °C, unknown when the probe is unplugged |
+| Probe 1 – 6 | °C, unavailable when the probe is unplugged |
 | Battery | diagnostic |
 | Raw packet | diagnostic, disabled by default; hex of the latest payload |
 

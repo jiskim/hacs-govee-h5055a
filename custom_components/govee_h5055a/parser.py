@@ -32,13 +32,14 @@ def parse(data: bytes) -> dict[str, float | int | str | None] | None:
     first = pair * 2 + 1
     return {
         "battery": data[5] & 0x7F,
-        f"probe_{first}": _temp(data[8:10]),
-        f"probe_{first + 1}": _temp(data[14:16]),
+        f"probe_{first}": _temp(data[6], first, data[8:10]),
+        f"probe_{first + 1}": _temp(data[6], first + 1, data[14:16]),
         "raw": data.hex(),
     }
 
 
-def _temp(raw: bytes) -> float | None:
-    if raw == NO_PROBE:
+def _temp(ids: int, probe: int, raw: bytes) -> float | None:
+    """Temperature of one probe, or None when it is unplugged."""
+    if not ids & (1 << (probe - 1)) or raw == NO_PROBE:
         return None
     return int.from_bytes(raw, "big", signed=True) / 100
